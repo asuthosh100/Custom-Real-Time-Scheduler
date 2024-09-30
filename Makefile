@@ -1,4 +1,4 @@
-KERNEL_SRC:= <PATH_TO_YOUR_5.15.127_KERNEL>
+KERNEL_SRC:= /lib/modules/$(shell uname -r)/build
 SUBDIR= $(PWD)
 GCC:=gcc
 RM:=rm
