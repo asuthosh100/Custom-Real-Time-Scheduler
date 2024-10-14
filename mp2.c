@@ -51,7 +51,7 @@ int __init rts_init(void)
 	proc_dir = proc_mkdir("mp2", NULL);
 	printk(KERN_ALERT "mp1 created....\n"); 
 
-	proc_entry = proc_create("status", 0666, proc_dir &mp1_ops);
+	proc_entry = proc_create("status", 0666, proc_dir, &mp1_ops);
 
 	if (!proc_entry) {
 		printk(KERN_ALERT "status creation failed....\n");
