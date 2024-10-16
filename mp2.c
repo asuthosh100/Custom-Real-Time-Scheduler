@@ -11,7 +11,6 @@
 #include <linux/timer.h> 
 #include <linux/workqueue.h> 
 #include <linux/spinlock.h>
-#include "mp1_given.h"
 #include <linux/sched.h>
 #include <linux/types.h>
 #include <linux/jiffies.h>  
@@ -51,7 +50,7 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 	pid_t pid;
 	unsigned long period;
 	unsigned long processing_time; 
-	char type
+	char type;
 
 	char *kbuffer = kmalloc(count + 1, GFP_KERNEL);
 	
@@ -71,9 +70,9 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
 	kbuffer[count] = '\0';
 
-	sscanf(kbuffer, "%c,%d,%d,%d", type, pid, period, processing_time);
+	sscanf(kbuffer, "%c,%d,%lu,%lu", type, pid, period, processing_time);
 
-	pr_info("Type: %c, PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
+	printk("Type: %c, PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
 
 	kfree(kbuffer);
 	return 0;

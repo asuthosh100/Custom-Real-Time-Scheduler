@@ -23,6 +23,9 @@ int main(int argc, char *argv[])
     }
     
     fprintf(file, "R,%d,%lu,%lu\n", pid, period, processing_time);
+
+   // printk("Sent to kernel "R,%d,%lu,%lu\n", pid, period, processing_time);
+    printf("Sent to kernel:R,%d,%lu,%lu\n", pid, period, processing_time);
     fclose(file); 
 
     return 0;
