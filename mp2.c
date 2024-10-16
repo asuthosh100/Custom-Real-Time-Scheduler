@@ -48,8 +48,8 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
     pid_t pid;
-    unsigned long period;
-    unsigned long processing_time; 
+    unsigned int period;
+    unsigned int processing_time; 
     char type;
 
     char *kbuffer = kmalloc(count + 1, GFP_KERNEL);
@@ -71,15 +71,22 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     kbuffer[count] = '\0';
 
-    // Parse input data
-    if (sscanf(kbuffer, "%c,%d,%lu,%lu", &type, &pid, &period, &processing_time) != 4) {
-        printk(KERN_ERR "Invalid input format\n");
-        kfree(kbuffer);
-        return -EINVAL;
-    }
+    // // Parse input data
+    // if (sscanf(kbuffer, "%c,%d,%lu,%lu", &type, &pid, &period, &processing_time) != 4) {
+    //     printk(KERN_ERR "Invalid input format\n");
+    //     kfree(kbuffer);
+    //     return -EINVAL;
+    // }
 
     // Log parsed values in the kernel log
-    printk(KERN_INFO "Type: %c, PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
+
+	sscanf(strsep(&kbuffer, ","), "%u", &pid);
+    // set period
+    sscanf(strsep(&kbuffer, ","), "%u", &period);
+    // set computation
+    sscanf(strsep(&kbuffer, "\n"), "%u", &processing_time);
+    
+	printk(KERN_INFO "PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
 
     kfree(kbuffer);
 
