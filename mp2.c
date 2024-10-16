@@ -69,6 +69,8 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
         return -EFAULT; 
     }
 
+    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);
+
     kbuffer[count] = '\0';
 
     // // Parse input data
@@ -78,15 +80,15 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
     //     return -EINVAL;
     // }
 
-    // Log parsed values in the kernel log
+
 
 	sscanf(strsep(&kbuffer, ","), "%u", &pid);
-    // set period
+   
     sscanf(strsep(&kbuffer, ","), "%u", &period);
-    // set computation
+   
     sscanf(strsep(&kbuffer, "\n"), "%u", &processing_time);
     
-	printk(KERN_INFO "PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
+	printk(KERN_ALERT "PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
 
     kfree(kbuffer);
 
@@ -111,7 +113,7 @@ int __init rts_init(void)
 	// Insert your code here ...
 
 	proc_dir = proc_mkdir("mp2", NULL);
-	printk(KERN_ALERT "mp1 created....\n"); 
+	printk(KERN_ALERT "mp2 created....\n"); 
 
 	proc_entry = proc_create("status", 0666, proc_dir, &mp1_ops);
 
