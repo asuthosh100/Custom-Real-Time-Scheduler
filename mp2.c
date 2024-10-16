@@ -1,9 +1,20 @@
 #define LINUX
 
 #include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/proc_fs.h>
+#include <linux/moduleparam.h>
 #include <linux/init.h>
+#include <linux/kernel.h>   
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
+#include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/timer.h> 
+#include <linux/workqueue.h> 
+#include <linux/spinlock.h>
+#include "mp1_given.h"
+#include <linux/sched.h>
+#include <linux/types.h>
+#include <linux/jiffies.h>  
 
 #include "mp2_given.h"
 
@@ -15,18 +26,56 @@ MODULE_DESCRIPTION("CS-423 MP2");
 
 static struct proc_dir_entry *proc_dir, *proc_entry; 
 
+// struct mp2_task_struct {
+// 	struct task_struct *linux_task;
+// 	struct timer_list wakeup_timer;
+// 	struct list_head list;
+// 	pid_t pid;
+// 	unsigned long period;
+// 	unsigned long processing_time;
+// 	unsigned long deadline_jiff;
+// 	enum task_state state;
+// };
+
 
 #define DEBUG 1
 //------------------------------------------------------------------
-static ssize_t myread(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
+static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
 {
 	printk( KERN_DEBUG "read handler\n");
 	return 0;
 }
 
-static ssize_t mywrite(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
-{
-	printk( KERN_DEBUG "write handler\n");
+static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
+{	
+	pid_t pid;
+	unsigned long period;
+	unsigned long processing_time; 
+	char type
+
+	char *kbuffer = kmalloc(count + 1, GFP_KERNEL);
+	
+	if(!kbuffer) {
+		return -ENOMEM;
+	}
+
+	if(count > sizeof(kbuffer)-1) 
+		return -EINVAL;
+
+
+	// copies pid from user space
+	if(copy_from_user(kbuffer, ubuf, count)) {
+		kfree(kbuffer);
+		return -EFAULT; 
+	}
+
+	kbuffer[count] = '\0';
+
+	sscanf(kbuffer, "%c,%d,%d,%d", type, pid, period, processing_time);
+
+	pr_info("PID: %d, ")
+
+
 	return 0;
 	
 }
@@ -35,8 +84,8 @@ static ssize_t mywrite(struct file *file, const char __user *ubuf, size_t count,
 static const struct proc_ops mp1_ops = 
 {
 	.proc_open = simple_open,
-	.proc_read = myread,
-	.proc_write = mywrite,
+	.proc_read = read_handler,
+	.proc_write = write_handler,
 };
 
 
