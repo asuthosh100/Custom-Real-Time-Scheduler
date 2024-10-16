@@ -69,26 +69,21 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
         return -EFAULT; 
     }
 
-    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);
-
     kbuffer[count] = '\0';
 
+    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);
+
+  
+
     // // Parse input data
-    // if (sscanf(kbuffer, "%c,%d,%lu,%lu", &type, &pid, &period, &processing_time) != 4) {
-    //     printk(KERN_ERR "Invalid input format\n");
-    //     kfree(kbuffer);
-    //     return -EINVAL;
-    // }
+    if (sscanf(kbuffer, "%c,%d,%u,%u", &type, &pid, &period, &processing_time) != 4) {
+        printk(KERN_ERR "Invalid input format\n");
+        kfree(kbuffer);
+        return -EINVAL;
+    }
 
-
-
-	sscanf(strsep(&kbuffer, ","), "%u", &pid);
-   
-    sscanf(strsep(&kbuffer, ","), "%u", &period);
-   
-    sscanf(strsep(&kbuffer, "\n"), "%u", &processing_time);
     
-	printk(KERN_ALERT "PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
+	printk(KERN_ALERT "PID: %d, Period: %u, Computation: %u\n", pid, period, processing_time);
 
     kfree(kbuffer);
 
