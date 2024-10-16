@@ -73,9 +73,9 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
 	sscanf(kbuffer, "%c,%d,%d,%d", type, pid, period, processing_time);
 
-	pr_info("PID: %d, ")
+	pr_info("Type: %c, PID: %d, Period: %lu, Computation: %lu\n", type, pid, period, processing_time);
 
-
+	kfree(kbuffer);
 	return 0;
 	
 }
