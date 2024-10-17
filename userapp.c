@@ -38,11 +38,13 @@ int main(int argc, char *argv[])
     //     printf("Failed to write the entire buffer to /proc\n");
     // }
 
-    if(write(fd, buffer, strlen(buffer))<0) {
-        perror("Failed to Write to Kernel Module");
-        close(fd);
-        return -1;
-    }
+    // if(write(fd, buffer, strlen(buffer)) <0 ) {
+    //     perror("Failed to Write to Kernel Module");
+    //     close(fd);
+    //     return -1;
+    // }
+    write(fd, buffer, strlen(buffer)); 
+    fsync(fd);
     
     printf("Sent to kernel:R,%d,%u,%u\n", pid, period, processing_time);
     close(fd); 

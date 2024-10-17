@@ -47,6 +47,8 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
+    printk(KERN_ALERT "Write Handler");
+    
     pid_t pid;
     unsigned int period;
     unsigned int processing_time; 
