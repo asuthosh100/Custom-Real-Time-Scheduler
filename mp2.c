@@ -52,43 +52,43 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
     unsigned int processing_time; 
     char type;
 
+    // Allocate memory for the kernel buffer
     char *kbuffer = kmalloc(count + 1, GFP_KERNEL);
     
-    if(!kbuffer) {
+    if (!kbuffer) {
         return -ENOMEM;
     }
 
-    if(count > sizeof(kbuffer)-1) {
+    // Ensure the buffer size is valid
+    if (count > sizeof(kbuffer) - 1) {
         kfree(kbuffer);
         return -EINVAL;
     }
 
-    // Copy data from user space
-    if(copy_from_user(kbuffer, ubuf, count)) {
+    // Copy data from user space to the kernel buffer
+    if (copy_from_user(kbuffer, ubuf, count)) {
         kfree(kbuffer);
         return -EFAULT; 
     }
 
-    kbuffer[count] = '\0';
+    kbuffer[count] = '\0';  // Null-terminate the string
 
-    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);
+    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);  // Print the raw buffer content
 
-  
-
-    // // Parse input data
+    // Parse the input data (expecting "R,%d,%u,%u\n")
     if (sscanf(kbuffer, "%c,%d,%u,%u", &type, &pid, &period, &processing_time) != 4) {
         printk(KERN_ERR "Invalid input format\n");
         kfree(kbuffer);
-        return -EINVAL;
+        return -EINVAL;  // Input format didn't match
     }
 
-    
-	printk(KERN_ALERT "PID: %d, Period: %u, Computation: %u\n", pid, period, processing_time);
+    // Log the parsed values
+    printk(KERN_ALERT "Type: %c, PID: %d, Period: %u, Processing Time: %u\n", type, pid, period, processing_time);
 
-    kfree(kbuffer);
-
+    kfree(kbuffer);  // Free the allocated memory
     return count;
 }
+
 
 
 static const struct proc_ops mp1_ops = 

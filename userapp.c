@@ -26,10 +26,14 @@ int main(int argc, char *argv[])
     
     //fprintf(file, "R,%d,%u,%u\n", pid, period, processing_time);
 
-    snprintf(buffer, sizeof(buffer), "R,%d,%lu,%lu\n", pid, period, processing_time);
-    fwrite(buffer, sizeof(char), strlen(buffer), file);
-   // printk("Sent to kernel "R,%d,%lu,%lu\n", pid, period, processing_time);
-    printf("Sent to kernel:R,%d,%lu,%lu\n", pid, period, processing_time);
+    snprintf(buffer, sizeof(buffer), "R,%d,%u,%u\n", pid, period, processing_time);
+    size_t bytes_written = fwrite(buffer, sizeof(char), strlen(buffer), file);
+
+    if (bytes_written != strlen(buffer)) {
+        printf("Failed to write the entire buffer to /proc\n");
+    }
+    
+    printf("Sent to kernel:R,%d,%u,%u\n", pid, period, processing_time);
     fclose(file); 
 
     return 0;
