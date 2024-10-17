@@ -47,28 +47,21 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
-    printk(KERN_ALERT "Write Handler");
-    
-    pid_t pid;
-    unsigned int period;
-    unsigned int processing_time; 
-    char type;
+    char *pid;
+    char *period;
+    char *processing_time; 
+    char *type;
+    char *kbuffer;
 
     // Allocate memory for the kernel buffer
-    char *kbuffer = kmalloc(count + 1, GFP_KERNEL);
-    
+    kbuffer = kmalloc(count + 1, GFP_KERNEL);
     if (!kbuffer) {
         return -ENOMEM;
     }
 
-    // Ensure the buffer size is valid
-    if (count > sizeof(kbuffer) - 1) {
-        kfree(kbuffer);
-        return -EINVAL;
-    }
-
     // Copy data from user space to the kernel buffer
     if (copy_from_user(kbuffer, ubuf, count)) {
+        printk(KERN_ALERT "invalid copy data");
         kfree(kbuffer);
         return -EFAULT; 
     }
@@ -77,19 +70,25 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);  // Print the raw buffer content
 
-    // Parse the input data (expecting "R,%d,%u,%u\n")
-    if (sscanf(kbuffer, "%c,%d,%u,%u", &type, &pid, &period, &processing_time) != 4) {
+    //Parse the input data (expecting "R,<pid>,<period>,<processing_time>\n")
+    type = strsep(&kbuffer, ","); 
+    pid = strsep(&kbuffer, ",");
+    period = strsep(&kbuffer, ",");
+    processing_time = strsep(&kbuffer, ",");
+
+    if (!type || !pid || !period || !processing_time) {
         printk(KERN_ERR "Invalid input format\n");
         kfree(kbuffer);
         return -EINVAL;  // Input format didn't match
     }
 
     // Log the parsed values
-    printk(KERN_ALERT "Type: %c, PID: %d, Period: %u, Processing Time: %u\n", type, pid, period, processing_time);
+    printk(KERN_ALERT "Type: %s, PID: %s, Period: %s, Processing Time: %s\n", type, pid, period, processing_time);
 
     kfree(kbuffer);  // Free the allocated memory
     return count;
 }
+
 
 
 

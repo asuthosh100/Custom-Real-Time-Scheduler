@@ -6,50 +6,54 @@
 #include <stdlib.h>
 
 #define FILE_PATH "/proc/mp2/status"
-#define SIZE 4096
+#define SIZE 100
 
 int main(int argc, char *argv[])
 {
-    pid_t pid = getpid(); 
+    pid_t pid = getpid();
+    char pid_str[10]; // Buffer to hold the string representation of the PID
+    sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
+
+    printf("Successfully registered process with PID: %s\n", pid_str);
+
     int fd; 
     char buffer[SIZE];
 
-    unsigned int period = atoi(argv[1]); 
-    unsigned int processing_time = atoi(argv[2]); 
-//-------------REGISTER-------------------------------
-    // FILE *file = fopen(FILE_PATH, "w"); 
-    
- 
-
-    fd = open(FILE_PATH, O_WRONLY); 
-    if(fd == -1) {
-        perror("Failed to open /proc");
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <period> <processing_time>\n", argv[0]);
         return 1;
     }
-    
-    //fprintf(file, "R,%d,%u,%u\n", pid, period, processing_time);
 
-    snprintf(buffer, sizeof(buffer), "R,%d,%u,%u\n", pid, period, processing_time);
+    char *period = argv[1];
+    char *processing_time = argv[2];
 
-    printf("Buffer val : %s\n", buffer);
-    // size_t bytes_written = fwrite(buffer, sizeof(char), strlen(buffer), file);
+   printf("Per: %s and Comp: %s\n", period, processing_time);
 
-    // if (bytes_written != strlen(buffer)) {
-    //     printf("Failed to write the entire buffer to /proc\n");
-    // }
+//-------------REGISTER-------------------------------
 
-    // if(write(fd, buffer, strlen(buffer)) <0 ) {
-    //     perror("Failed to Write to Kernel Module");
-    //     close(fd);
-    //     return -1;
-    // }
-    write(fd, buffer, strlen(buffer)); 
-    fsync(fd);
-    
-    printf("Sent to kernel:R,%d,%u,%u\n", pid, period, processing_time);
-    close(fd); 
+    //Open the file directly for writing
+    fd = open(FILE_PATH, O_WRONLY); 
+    if(fd == -1) {
+        perror("Failed to open /proc/mp2/status");
+        return 1;
+    }
+
+    // Format the registration string
+    memset(buffer, 0, SIZE); // Clear the buffer
+    sprintf(buffer, "R,%s,%s,%s\n", pid_str, period, processing_time);
+
+    printf("Buffer val: %s\n", buffer);
+    // Write the string to /proc/mp2/status
+    if (write(fd, buffer, strlen(buffer)) == -1) {
+        perror("Failed to write to /proc/mp2/status");
+        close(fd);
+        return 1;
+    }
+
+    // Close the file
+    close(fd);
+
+    //printf("Successfully registered process with PID: %s\n", pid_str);
 
     return 0;
-
 }
-
