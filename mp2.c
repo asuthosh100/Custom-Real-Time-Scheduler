@@ -91,7 +91,7 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
 
 
-static const struct proc_ops mp1_ops = 
+static const struct proc_ops mp2_ops = 
 {
 	.proc_open = simple_open,
 	.proc_read = read_handler,
@@ -110,7 +110,7 @@ int __init rts_init(void)
 	proc_dir = proc_mkdir("mp2", NULL);
 	printk(KERN_ALERT "mp2 created....\n"); 
 
-	proc_entry = proc_create("status", 0666, proc_dir, &mp1_ops);
+	proc_entry = proc_create("status", 0666, proc_dir, &mp2_ops);
 
 	if (!proc_entry) {
 		printk(KERN_ALERT "status creation failed....\n");
