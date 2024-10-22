@@ -55,8 +55,9 @@ struct mp2_task_struct {
 
 #define DEBUG 1
 //------------------------------------------------------------------
-static ssize_t myread(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
-{
+static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
+{	
+	//printk(KERN_ALERT "read_handler"); 
 
 	struct mp2_task_struct *p; 
 	char *kbuf; 
@@ -74,37 +75,41 @@ static ssize_t myread(struct file *file, char __user *ubuf, size_t count, loff_t
 	
 	mutex_lock(&pcb_list_mutex);
 	list_for_each_entry(p, &pcb_task_list, list) {
-		len += scnprintf(kbuf + len, count-len, "%u, %u, %u", p->pid, p->period, p->computation);
+		len += sprintf(kbuf + len, "%u, %lu, %lu\n", p->pid_ts, p->period_ms, p->computation);
 		//printk(KERN_INFO "PID:%d and READ_TIME:%lu\n", p->pid, p->cpu_time);
-	// 	if(len > count) {
-	//         len = count;
-	//         break;
-	//   }
+		if(len > count) {
+	        len = count;
+	        break;
+	  }
 	}
 	mutex_unlock(&pcb_list_mutex); 
+	
+	//printk(KERN_ALERT "Kbuf value in Read handler: %s", kbuf);
 
 	
-	// checks bounds of len
-	// if(len > count) {
-	//   	len = count;
-	// }
+	//checks bounds of len
+	if(len > count) {
+	  	len = count;
+	}
   
-    // if (len < count) {
+    if (len < count) {
 	  kbuf[len] = '\0';
-	// }
+	}
 
-	// if(*ppos >= len) {
-	// 	kfree(kbuf);
-	// 	return 0;
-    // }
-    // send it to user buffer
-    if(copy_to_user(ubuf, kbuf, len)) {
-        kfree(kbuf);
-    	return -EFAULT;
+	if(*ppos >= len) {
+		kfree(kbuf);
+		return 0;
     }
+    // send it to user buffer
+    if (copy_to_user(ubuf, kbuf, len)) {
+		kfree(kbuf);
+    	return -EFAULT;
+	}
+        
+
     
-	// update *ppos according to len
-    //*ppos += len;
+	//update *ppos according to len
+    *ppos += len;
 	kfree(kbuf);
 
 	// return bytes read

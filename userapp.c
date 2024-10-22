@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 //-------------REGISTER-------------------------------
 
     //Open the file directly for writing
-    fd = open(FILE_PATH, O_WRONLY); 
+    fd = open(FILE_PATH, O_RDWR); 
     if(fd == -1) {
         perror("Failed to open /proc/mp2/status");
         return 1;
@@ -50,8 +50,10 @@ int main(int argc, char *argv[])
         close(fd);
         return 1;
     }
+   
 
     read(fd, rbuf, sizeof(rbuf));
+    printf("Read Buffer val: %s\n", rbuf);
     puts(rbuf);
 
     // Close the file
