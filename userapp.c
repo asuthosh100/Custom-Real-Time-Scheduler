@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 
     int fd; 
     char buffer[SIZE];
+    char rbuf[SIZE];
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <period> <processing_time>\n", argv[0]);
@@ -49,6 +50,9 @@ int main(int argc, char *argv[])
         close(fd);
         return 1;
     }
+
+    read(fd, rbuf, sizeof(rbuf));
+    puts(rbuf);
 
     // Close the file
     close(fd);
