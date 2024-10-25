@@ -125,8 +125,8 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
     char *type;
     char *kbuffer;
 
-	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
-	INIT_LIST_HEAD(&new_task->list); 
+	// struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
+	// INIT_LIST_HEAD(&new_task->list); 
 
 
     // Allocate memory for the kernel buffer
@@ -144,16 +144,20 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     kbuffer[count] = '\0';  // Null-terminate the string
 
-    printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);  // Print the raw buffer content
+    //printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);  // Print the raw buffer content
 
 
     //Parse the input data (expecting "R,<pid>,<period>,<processing_time>\n")
     type = strsep(&kbuffer, ","); 
+	printk(KERN_ALERT "type: %s\n", type);
 
+	//if(type == REGISTER) {
 	// printk(KERN_ALERT "type: %s\n", type);
 
-
-	// __register_task(kbuffer + 3); 
+	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
+	INIT_LIST_HEAD(&new_task->list); 
+	
+  // __register_task(kbuffer + 3); 
     pid = strsep(&kbuffer, ",");
     period = strsep(&kbuffer, ",");
     processing_time = strsep(&kbuffer, ",");
@@ -172,11 +176,13 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 		return -EINVAL; 
 	}
 	
-	printk(KERN_ALERT "PID: %d, Period: %lu, Processing Time: %lu\n", new_task->pid_ts, new_task->period_ms, new_task->computation);
+	//printk(KERN_ALERT "PID: %d, Period: %lu, Processing Time: %lu\n", new_task->pid_ts, new_task->period_ms, new_task->computation);
 	
 	mutex_lock(&pcb_list_mutex); 
 	list_add(&new_task->list, &pcb_task_list); 
 	mutex_unlock(&pcb_list_mutex); 
+
+//	}
 
 
 	//kmem_cache_free(mp2_ts, new_task);
