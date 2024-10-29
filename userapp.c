@@ -15,6 +15,8 @@ long getTime_ms(struct timespec begin);
 int process_in_the_list(unsigned int pid, int pid_arr[], int size);
 void do_job();
 void yield(int fd, char pid_str);
+//void deregister(int fd, char pid_str);
+void deregister(int fd, unsigned int pid);
 
 int main(int argc, char *argv[])
 {
@@ -131,6 +133,9 @@ int main(int argc, char *argv[])
     // }
     //-----------DEREGISTER--------------------------------------------------------------------------------------
     // Close the file
+
+    deregister(fd, r_pid);
+
     close(fd);
 
     //printf("Successfully registered process with PID: %s\n", pid_str);
@@ -145,6 +150,17 @@ void yield(int fd, char pid_str) {
 
     write(fd, ybuf, strlen(ybuf));
 
+}
+
+void deregister(int fd, unsigned int pid) {
+
+    char dbuf[SIZE];
+    memset(dbuf, 0, SIZE); 
+    sprintf(dbuf, "D,%d\n",pid);
+
+    printf("Dbuf %s\n", dbuf);
+
+    write(fd, dbuf, strlen(dbuf));
 }
 
 void do_job() {

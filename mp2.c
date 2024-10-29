@@ -51,6 +51,8 @@ struct mp2_task_struct {
 };
 
 //void __register_task(char *kbuffer);
+void register_task(char *kbuf);
+void deregister_task(char *dbuf);
 
 
 #define DEBUG 1
@@ -119,14 +121,9 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
-    char *pid;
-    char *period;
-    char *processing_time; 
+
     char *type;
     char *kbuffer;
-
-	// struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
-	// INIT_LIST_HEAD(&new_task->list); 
 
 
     // Allocate memory for the kernel buffer
@@ -144,36 +141,56 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     kbuffer[count] = '\0';  // Null-terminate the string
 
-    //printk(KERN_ALERT "Kernel Value Buffer: %s\n", kbuffer);  // Print the raw buffer content
-
-
-    //Parse the input data (expecting "R,<pid>,<period>,<processing_time>\n")
     type = strsep(&kbuffer, ","); 
 	printk(KERN_ALERT "type: %s\n", type);
 
-	//if(type == REGISTER) {
-	// printk(KERN_ALERT "type: %s\n", type);
 
+	if(strcmp(type, REGISTER)== 0) {
+		register_task(kbuffer);
+	}
+
+	else if (strcmp(type, DEREGISTER)== 0) {
+		deregister_task(kbuffer);
+	}
+
+	
+
+
+
+    kfree(kbuffer);  // Free the allocated memory
+    return count;
+}
+
+
+void register_task(char *kbuf) {
 	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
+	if (!new_task) {
+        printk(KERN_ERR "Failed to allocate memory for new task\n");
+        return;
+    }
 	INIT_LIST_HEAD(&new_task->list); 
+
+	char *pid;
+    char *period;
+    char *processing_time; 
 	
   // __register_task(kbuffer + 3); 
-    pid = strsep(&kbuffer, ",");
-    period = strsep(&kbuffer, ",");
-    processing_time = strsep(&kbuffer, ",");
+    pid = strsep(&kbuf, ",");
+    period = strsep(&kbuf, ",");
+    processing_time = strsep(&kbuf, ",");
 
-    if (!type || !pid || !period || !processing_time) {
-        printk(KERN_ERR "Invalid input format\n");
-        kfree(kbuffer);
-        return -EINVAL;  // Input format didn't match
+	if (!pid || !period || !processing_time) {
+        printk(KERN_ERR "Invalid input format in register_task\n");
+        kmem_cache_free(mp2_ts, new_task);
+        return;
     }
 
     // Log the parsed values
-	// printk(KERN_ALERT "Type: %s, PID: %s, Period: %s, Processing Time: %s\n", type, pid, period, processing_time);
+	printk(KERN_ALERT "PID: %s, Period: %s, Processing Time: %s\n", pid, period, processing_time);
 
 	if(kstrtoint(pid, 10, &(new_task->pid_ts)) || kstrtoul(period, 10, &(new_task->period_ms)) || kstrtoul(processing_time, 10, &(new_task->computation))) {
-		kfree(kbuffer);
-		return -EINVAL; 
+		kmem_cache_free(mp2_ts, new_task);
+        return;
 	}
 	
 	//printk(KERN_ALERT "PID: %d, Period: %lu, Processing Time: %lu\n", new_task->pid_ts, new_task->period_ms, new_task->computation);
@@ -181,13 +198,54 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 	mutex_lock(&pcb_list_mutex); 
 	list_add(&new_task->list, &pcb_task_list); 
 	mutex_unlock(&pcb_list_mutex); 
+}
 
-//	}
+void deregister_task(char *dbuf) {
+
+ printk(KERN_ALERT "Deregister handler invoked\n");
+
+	char *pid_str; 
+	unsigned int pid;
+
+	pid_str = strsep(&dbuf, ",");
+
+	if (kstrtoint(pid_str, 10, &pid)) {
+        printk(KERN_ERR "Invalid PID format in deregister_task\n");
+        return;
+    }
 
 
-	//kmem_cache_free(mp2_ts, new_task);
-    kfree(kbuffer);  // Free the allocated memory
-    return count;
+	struct mp2_task_struct *pos, *next, *temp; 
+
+	mutex_lock(&pcb_list_mutex); 
+	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
+		if(pos->pid_ts == pid) { 
+			list_del(&pos->list);
+			printk(KERN_ALERT "Deregistering pid %d\n",pid);
+			kmem_cache_free(mp2_ts, pos);
+			break;
+		}
+
+		else {
+			continue; 
+		}
+	//mutex_unlock(&pcb_list_mutex);
+
+	// mutex_lock(&pcb_ts_mutex);
+
+	// if(current_running_task == temp) {
+    //     current_running_task = NULL;
+    //     wake_up_process(dispatch_thread);
+    // }
+    // mutex_unlock(&pcb_ts_mutex);
+
+	
+
+
+	}
+	mutex_unlock(&pcb_list_mutex);
+
+
 }
 
 
@@ -206,19 +264,25 @@ int __init rts_init(void)
 	printk(KERN_ALERT "RTS MODULE LOADING\n");
 #endif
 	// Insert your code here ...
-
 	proc_dir = proc_mkdir("mp2", NULL);
-	printk(KERN_ALERT "mp2 created....\n"); 
-
-	proc_entry = proc_create("status", 0666, proc_dir, &mp2_ops);
-
-	if (!proc_entry) {
-		printk(KERN_ALERT "status creation failed....\n");
+	if (!proc_dir) {
+		printk(KERN_ALERT "Failed to create proc directory\n");
 		return -ENOMEM;
 	}
+
+	proc_entry = proc_create("status", 0666, proc_dir, &mp2_ops);
+	if (!proc_entry) {
+		printk(KERN_ALERT "Failed to create proc entry\n");
+		remove_proc_entry("mp2", NULL);
+		return -ENOMEM;
+	}
+
 	printk(KERN_ALERT "status created....\n");
 
 	mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_PANIC, NULL);
+
+	//mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_PANIC | __GFP_NOWARN, NULL);
+
 
 
 	printk(KERN_ALERT "RTS MODULE LOADED\n");
@@ -237,11 +301,7 @@ void __exit rts_exit(void)
 		printk(KERN_ALERT "RTS MODULE UNLOADING\n");
 	#endif
 
-	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {  
-			printk(KERN_ALERT "Freeing Tasks : %p\n", pos); 
-			list_del(&pos->list);
-			kmem_cache_free(mp2_ts, pos); 
-	}
+
 
 	remove_proc_entry("status", proc_dir);
 	printk(KERN_WARNING "status removed....\n");
@@ -249,6 +309,14 @@ void __exit rts_exit(void)
 	// Remove the directory within the proc filesystem
 	remove_proc_entry("mp2", NULL);
 	printk(KERN_WARNING "mp2 removed...\n");
+
+	mutex_destroy(&pcb_list_mutex);
+
+	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {  
+			printk(KERN_ALERT "Freeing Tasks : %p\n", pos); 
+			list_del(&pos->list);
+			kmem_cache_free(mp2_ts, pos); 
+	}
 	
 	kmem_cache_destroy(mp2_ts); 
 
