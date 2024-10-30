@@ -14,6 +14,9 @@
 #include <linux/types.h>
 #include <linux/jiffies.h>  
 #include "mp2_given.h"
+#include <linux/kthread.h>
+#include <uapi/linux/sched/types.h>
+
 
 // !!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!
 // Please put your name and email here
@@ -25,6 +28,10 @@ MODULE_DESCRIPTION("CS-423 MP2");
 #define YIELD "Y"
 #define DEREGISTER "D"
 
+#define DEBUG 1
+#define BOUND 6930
+#define FIXED_POINT_SCALE 10000
+
 static struct proc_dir_entry *proc_dir, *proc_entry; 
 
 static LIST_HEAD(pcb_task_list); 
@@ -32,12 +39,15 @@ static LIST_HEAD(pcb_task_list);
 struct kmem_cache *mp2_ts; 
 
 static DEFINE_MUTEX(pcb_list_mutex); 
+static DEFINE_MUTEX(pcb_ts_mutex);
 
 enum task_state {
     READY,
     RUNNING,
     SLEEPING,
 };
+
+static struct timer_list mp2_timer;
 
 struct mp2_task_struct {
 	struct task_struct *linux_task;
@@ -50,12 +60,25 @@ struct mp2_task_struct {
 	enum task_state state;
 };
 
+struct task_struct *dispatcher_thread_struct; 
+
+struct mp2_task_struct* mp2_current;
+
+
+//void __register_task(char *kbuffer);
+void __sched_new_task(struct mp2_task_struct *task);
+void __sched_old_task(struct mp2_task_struct *tsk);
+void __wake_up_current_task(struct mp2_task_struct *data);
+void timer_callback(struct timer_list *timer);
+static int admission_control(struct mp2_task_struct *data);
+
 //void __register_task(char *kbuffer);
 void register_task(char *kbuf);
 void deregister_task(char *dbuf);
+void yield_handler(char *ybuf);
 
 
-#define DEBUG 1
+
 //------------------------------------------------------------------
 static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
 {	
@@ -107,8 +130,6 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 		kfree(kbuf);
     	return -EFAULT;
 	}
-        
-
     
 	//update *ppos according to len
     *ppos += len;
@@ -149,15 +170,15 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 		register_task(kbuffer);
 	}
 
-	else if (strcmp(type, DEREGISTER)== 0) {
+	if (strcmp(type, DEREGISTER)== 0) {
 		deregister_task(kbuffer);
 	}
 
-	
+	else if (strcmp(type, YIELD)== 0) {
+		yield_handler(kbuffer); 
+	}
 
-
-
-    kfree(kbuffer);  // Free the allocated memory
+	kfree(kbuffer);  // Free the allocated memory
     return count;
 }
 
@@ -192,6 +213,17 @@ void register_task(char *kbuf) {
 		kmem_cache_free(mp2_ts, new_task);
         return;
 	}
+
+	new_task->deadline = 0; 
+
+	new_task->state = SLEEPING;
+	new_task->linux_task = find_task_by_pid(new_task->pid_ts); 
+
+	timer_setup(&new_task->wakeup_timer, timer_callback, 0); 
+
+	if (!admission_control(new_task)) {
+        return;
+    }
 	
 	//printk(KERN_ALERT "PID: %d, Period: %lu, Processing Time: %lu\n", new_task->pid_ts, new_task->period_ms, new_task->computation);
 	
@@ -206,6 +238,7 @@ void deregister_task(char *dbuf) {
 
 	char *pid_str; 
 	unsigned int pid;
+	struct mp2_task_struct *pos, *next, *temp; 
 
 	pid_str = strsep(&dbuf, ",");
 
@@ -215,11 +248,12 @@ void deregister_task(char *dbuf) {
     }
 
 
-	struct mp2_task_struct *pos, *next, *temp; 
+	// struct mp2_task_struct *pos, *next, *temp; 
 
 	mutex_lock(&pcb_list_mutex); 
 	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
 		if(pos->pid_ts == pid) { 
+			temp = pos;
 			list_del(&pos->list);
 			printk(KERN_ALERT "Deregistering pid %d\n",pid);
 			kmem_cache_free(mp2_ts, pos);
@@ -229,23 +263,213 @@ void deregister_task(char *dbuf) {
 		else {
 			continue; 
 		}
-	//mutex_unlock(&pcb_list_mutex);
-
-	// mutex_lock(&pcb_ts_mutex);
-
-	// if(current_running_task == temp) {
-    //     current_running_task = NULL;
-    //     wake_up_process(dispatch_thread);
-    // }
-    // mutex_unlock(&pcb_ts_mutex);
-
 	
-
-
 	}
 	mutex_unlock(&pcb_list_mutex);
 
+	mutex_lock(&pcb_ts_mutex);
 
+	if(mp2_current == temp) {
+        mp2_current = NULL;
+        wake_up_process(dispatcher_thread_struct);
+    }
+    mutex_unlock(&pcb_ts_mutex);
+
+
+}
+
+
+void yield_handler(char *ybuf) {
+
+	char *pid_yld; 
+	unsigned int pid;
+
+	struct mp2_task_struct *pos,*next;
+	struct mp2_task_struct *req_task = NULL;
+
+	printk(KERN_ALERT "entering yield handler");
+
+	pid_yld = strsep(&ybuf, ",");
+
+	if (kstrtoint(pid_yld, 10, &pid)) {
+        printk(KERN_ERR "Invalid PID format in deregister_task\n");
+        return;
+    }
+
+	printk(KERN_ALERT "yield handler:pid is %d\n", pid);
+
+
+
+	mutex_lock(&pcb_list_mutex); 
+	list_for_each_entry_safe(pos,next,&pcb_task_list,list) {
+		if(pos->pid_ts == pid) {
+			req_task = pos; 
+			break;
+		}
+	}
+	mutex_unlock(&pcb_list_mutex);
+
+	 if (!req_task) {
+        printk(KERN_ERR "Task with PID %u not found\n", pid);
+        return;
+    }
+
+	if(req_task->deadline == 0) {
+		req_task->deadline = jiffies + msecs_to_jiffies(req_task->period_ms);
+	} else {
+		req_task->deadline = req_task->deadline + msecs_to_jiffies(req_task->period_ms);
+
+		if(req_task->deadline < jiffies) {
+			return;
+		}
+
+		// else {
+		// 	break;
+		// }
+	}
+
+	mutex_lock(&pcb_ts_mutex);
+    mp2_current = NULL;
+	req_task->state = SLEEPING; 
+    mutex_unlock(&pcb_ts_mutex);
+
+	mod_timer(&(req_task->wakeup_timer), req_task->deadline);
+	// req_task->state = SLEEPING; 
+
+	wake_up_process(dispatcher_thread_struct);
+    // set_task_state(req_task->linux_task, TASK_UNINTERRUPTIBLE);
+	set_current_state(TASK_RUNNING);
+    schedule();
+
+
+}
+
+void timer_callback(struct timer_list *timer) {
+    struct mp2_task_struct *task = from_timer(task, timer, wakeup_timer);
+    task->state = READY;
+    wake_up_process(dispatcher_thread_struct);
+}
+
+
+void __sched_new_task(struct mp2_task_struct *task) {
+	struct sched_attr attr; 
+	attr.sched_policy = SCHED_FIFO;
+	attr.sched_priority = 99;
+	sched_setattr_nocheck(task->linux_task, &attr);
+}
+
+void __sched_old_task(struct mp2_task_struct *task) {
+	struct sched_attr attr;
+	attr.sched_policy = SCHED_NORMAL;
+	attr.sched_priority = 0;
+	sched_setattr_nocheck(task->linux_task, &attr);
+}
+
+static int dispatching_thread(void *data) {
+			
+		while(!kthread_should_stop()) {
+
+		set_current_state(TASK_INTERRUPTIBLE);
+        schedule();
+
+        if (kthread_should_stop()) {
+			printk(KERN_ALERT "Dispatching thread stopping\n");
+            return 0;
+        }
+
+		if (mp2_current == NULL) {
+            continue; // Skip if there's no current task
+        }
+
+		printk(KERN_DEBUG "dispatching_thread woke up\n");
+		// As soon as the thread wakes up, we need to find a new task in Ready State with the highest priority
+		struct mp2_task_struct *pos, *next;
+		struct mp2_task_struct *temp = NULL;
+
+		mutex_lock(&pcb_list_mutex);
+		printk(KERN_DEBUG "Dispatcher :Acquired pcb_list_mutex\n");
+		list_for_each_entry_safe(pos,next,&pcb_task_list,list) {  
+
+			// if(pos->state != READY) {
+			// 	continue;
+			// }
+
+			// if(!temp && pos->state == READY) {
+			// 	temp = pos;
+			// }
+			
+			// else if (pos->state == READY && pos->period_ms < mp2_current->period_ms) {
+			// 	temp = pos;
+			// }
+			if (pos->state == READY) {
+                if (!temp || pos->period_ms < temp->period_ms) {
+                    temp = pos;
+                }
+            }
+
+		}
+		mutex_unlock(&pcb_list_mutex); 
+		printk(KERN_DEBUG "Dispatcher released pcb_list_mutex\n");
+
+		
+		
+		mutex_lock(&pcb_ts_mutex);
+
+		if (temp == NULL && mp2_current) {
+			__sched_old_task(mp2_current);
+		}
+
+		else {
+			if(temp && mp2_current->period_ms > temp->period_ms) {
+			mp2_current->state = READY;
+			__sched_old_task(mp2_current);
+			}
+
+			__wake_up_current_task(temp);
+
+		}
+
+		mutex_unlock(&pcb_ts_mutex);
+		
+
+
+	}
+	return 0;
+	
+	
+}
+
+static int admission_control(struct mp2_task_struct *data) {
+
+	struct mp2_task_struct *pos, *next; 
+	unsigned long total_util = 0;
+	
+
+	mutex_lock(&pcb_list_mutex);
+	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
+		total_util += (pos->computation * FIXED_POINT_SCALE) / pos->period_ms; 
+	}
+
+
+	total_util += (data->computation * FIXED_POINT_SCALE)/data->period_ms ;
+
+	mutex_unlock(&pcb_list_mutex);
+
+	if(total_util > BOUND) {
+		return 0;
+	}
+
+	else {
+		return 1; 
+	}
+}
+
+
+void __wake_up_current_task(struct mp2_task_struct *data) {
+	data->state = RUNNING; 
+	wake_up_process(data->linux_task);
+	__sched_new_task(data);
+	mp2_current = data; 
 }
 
 
@@ -283,7 +507,7 @@ int __init rts_init(void)
 
 	//mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_PANIC | __GFP_NOWARN, NULL);
 
-
+	dispatcher_thread_struct = kthread_run(dispatching_thread, NULL, "dispatcher"); 
 
 	printk(KERN_ALERT "RTS MODULE LOADED\n");
 
@@ -310,7 +534,12 @@ void __exit rts_exit(void)
 	remove_proc_entry("mp2", NULL);
 	printk(KERN_WARNING "mp2 removed...\n");
 
+	del_timer_sync(&mp2_timer);
+
+	kthread_stop(dispatcher_thread_struct);
+
 	mutex_destroy(&pcb_list_mutex);
+	mutex_destroy(&pcb_ts_mutex); 
 
 	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {  
 			printk(KERN_ALERT "Freeing Tasks : %p\n", pos); 

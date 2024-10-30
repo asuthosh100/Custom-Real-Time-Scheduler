@@ -11,12 +11,16 @@
 #define SIZE 100
 #define PIDSIZE 100
 
+//=============================================================================
+
 long getTime_ms(struct timespec begin);
 int process_in_the_list(unsigned int pid, int pid_arr[], int size);
 void do_job();
-void yield(int fd, char pid_str);
+void yield(int fd, unsigned int pid);
 //void deregister(int fd, char pid_str);
 void deregister(int fd, unsigned int pid);
+
+//==================================================================================
 
 int main(int argc, char *argv[])
 {
@@ -111,27 +115,32 @@ int main(int argc, char *argv[])
 
     printf("Line 105");
 
-    // long wakeup_time, process_time; 
-    // struct timespec t0; 
+    long wakeup_time, process_time; 
+    struct timespec t0; 
 
-    // clock_gettime(CLOCK_MONOTONIC, &t0); 
+    clock_gettime(CLOCK_MONOTONIC, &t0); 
 
-    // yield(fd, pid_str); 
+    yield(fd, r_pid);  
 
-    // while(proc == 1) {
-    //     //wakeup_time = getTime_ms(t0); 
+    while(proc == 1) {
 
-    //     printf("doing job");
+        //wakeup_time = getTime_ms(t0); 
 
-    //     //do_job(); 
+        printf("doing job");
 
-    //     printf("job done");
+        do_job(); 
 
-    //     //process_time = getTime_ms(t0) - wakeup_time; 
+        printf("job done");
 
-    //    // yield(fd, pid_str); 
-    // }
-    //-----------DEREGISTER--------------------------------------------------------------------------------------
+        //process_time = getTime_ms(t0) - wakeup_time; 
+
+       yield(fd, r_pid); 
+       
+       usleep(10000); 
+
+    }
+    //-----------DEREGISTER--
+    ------------------------------------------------------------------------------------
     // Close the file
 
     deregister(fd, r_pid);
@@ -142,11 +151,11 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void yield(int fd, char pid_str) {
+void yield(int fd, unsigned int pid) {
 
     char ybuf[SIZE];
     memset(ybuf, 0, SIZE); 
-    sprintf(ybuf, "Y, %s\n",pid_str);
+    sprintf(ybuf, "Y,%d\n",pid);
 
     write(fd, ybuf, strlen(ybuf));
 
@@ -189,14 +198,14 @@ int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
     return 0;
 }
 
-long getTime_ms(struct timespec begin) {
-    struct timespec curr; 
-    long sec, nanosec; 
+// long getTime_ms(struct timespec begin) {
+//     struct timespec curr; 
+//     long sec, nanosec; 
 
-    clock_gettime(CLOCK_MONOTONIC, &curr); 
+//     clock_gettime(CLOCK_MONOTONIC, &curr); 
 
-    sec = curr.tv_sec - begin.tv_sec;
-    nanosec = curr.tv_nsec - begin.tv_nsec; 
+//     sec = curr.tv_sec - begin.tv_sec;
+//     nanosec = curr.tv_nsec - begin.tv_nsec; 
 
-    return (sec*1000) + (nanosec/1000000); 
-}
+//     return (sec*1000) + (nanosec/1000000); 
+// }
