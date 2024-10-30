@@ -13,12 +13,13 @@
 
 //=============================================================================
 
-long getTime_ms(struct timespec begin);
+//long getTime_ms(struct timespec begin);
 int process_in_the_list(unsigned int pid, int pid_arr[], int size);
 void do_job();
 void yield(int fd, unsigned int pid);
 //void deregister(int fd, char pid_str);
 void deregister(int fd, unsigned int pid);
+unsigned long get_time_ms(struct timespec time);
 
 //==================================================================================
 
@@ -39,10 +40,34 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    char *period = argv[1];
-    char *processing_time = argv[2];
+    //char *period = argv[1];
+    //char *processing_time = argv[2];
+
+    int yield_iterations = atoi(argv[2]);
+    int period_rand = atoi(argv[1]);
+
 
    //printf("Per: %s and Comp: %s\n", period, processing_time);
+   
+   struct timespec start_time, time_after_call;
+    int computation;
+
+    
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    
+    do_job(); 
+
+    clock_gettime(CLOCK_MONOTONIC, &time_after_call);
+
+    computation = (int)(get_time_ms(time_after_call) - get_time_ms(start_time))/1000;
+
+    printf("computation : %lu\n", computation);
+
+    int period = period_rand*computation;
+
+    printf("period = %d", period);
+
 
 //-------------REGISTER-------------------------------
 
@@ -55,7 +80,7 @@ int main(int argc, char *argv[])
 
     // Format the registration string
     memset(buffer, 0, SIZE); // Clear the buffer
-    sprintf(buffer, "R,%s,%s,%s\n", pid_str, period, processing_time);
+    sprintf(buffer, "R,%s,%d,%d\n", pid_str, period, computation);
 
     //printf("Buffer val: %s\n", buffer);
     // Write the string to /proc/mp2/status
@@ -83,7 +108,7 @@ int main(int argc, char *argv[])
 
     while(tokenize != NULL) {
         if(sscanf(tokenize, "%d, %lu, %lu", &r_pid, &r_period, &r_computation)){
-                printf("TOKENIZED %d, %lu, %lu\n", r_pid, r_period, r_computation );
+                //printf("TOKENIZED %d, %lu, %lu\n", r_pid, r_period, r_computation );
                 pid_array[i] = r_pid;
         
                 i++;
@@ -106,41 +131,45 @@ int main(int argc, char *argv[])
 
     int proc = process_in_the_list((unsigned int)pid, pid_array, i);
 
-    printf("proc val %d\n", proc); 
+   // printf("proc val %d\n", proc); 
 
     if(proc == 0) {
         close(fd);
         return 0;
     }
 
-    printf("Line 105");
+    //printf("Line 105");
 
-    long wakeup_time, process_time; 
-    struct timespec t0; 
+    // long wakeup_time, process_time; 
+    // struct timespec t0; 
 
-    clock_gettime(CLOCK_MONOTONIC, &t0); 
+    // clock_gettime(CLOCK_MONOTONIC, &t0); 
 
-    yield(fd, r_pid);  
+    yield(fd, r_pid); 
+    printf("Initial Yield done\n") ; 
 
-    while(proc == 1) {
+
+    printf("entering while loop for running the process\n");
+    while(yield_iterations--) {
 
         //wakeup_time = getTime_ms(t0); 
 
         printf("doing job");
 
         do_job(); 
+        //usleep(10000); 
 
         printf("job done");
 
         //process_time = getTime_ms(t0) - wakeup_time; 
 
        yield(fd, r_pid); 
-       
-       usleep(10000); 
+
+       //usleep(10000); 
 
     }
     //-----------DEREGISTER--
-    ------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------------
     // Close the file
 
     deregister(fd, r_pid);
@@ -209,3 +238,7 @@ int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
 
 //     return (sec*1000) + (nanosec/1000000); 
 // }
+
+unsigned long get_time_ms(struct timespec time) {
+     return time.tv_sec * 1000000000L + time.tv_nsec;
+}
