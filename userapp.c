@@ -16,26 +16,24 @@
 //long getTime_ms(struct timespec begin);
 int process_in_the_list(unsigned int pid, int pid_arr[], int size);
 void do_job();
-void yield(int fd, unsigned int pid);
-//void deregister(int fd, char pid_str);
-void deregister(int fd, unsigned int pid);
+void yield(unsigned int pid);
+void deregister(unsigned int pid);
 unsigned long get_time_ms(struct timespec time);
+void register_task(unsigned int pid, unsigned long period, unsigned long computation);
 
 //==================================================================================
 
 int main(int argc, char *argv[])
 {
-    pid_t pid = getpid();
-    char pid_str[10]; // Buffer to hold the string representation of the PID
-    sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
+    int pid = getpid();
+    // char pid_str[10]; // Buffer to hold the string representation of the PID
+    // sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
 
     //printf("Successfully registered process with PID: %s\n", pid_str);
-
-    int fd; 
-    char buffer[SIZE];
+    
     char rbuf[SIZE];
 
-    if (argc != 3) {
+    if (argc != 4) {
         fprintf(stderr, "Usage: %s <period> <processing_time>\n", argv[0]);
         return 1;
     }
@@ -43,58 +41,82 @@ int main(int argc, char *argv[])
     //char *period = argv[1];
     //char *processing_time = argv[2];
 
-    int yield_iterations = atoi(argv[2]);
-    int period_rand = atoi(argv[1]);
+    int yield_iterations = atoi(argv[1]); // for how many periods
+    int jobs = atoi(argv[2]); // number of jobs
+    int period_rand = atoi(argv[3]); // for period time
 
 
    //printf("Per: %s and Comp: %s\n", period, processing_time);
    
    struct timespec start_time, time_after_call;
-    int computation;
+    unsigned long computation;
 
     
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     
-    do_job(); 
+    do_job(jobs); 
 
     clock_gettime(CLOCK_MONOTONIC, &time_after_call);
 
-    computation = (int)(get_time_ms(time_after_call) - get_time_ms(start_time))/1000;
+    computation = (unsigned long)(get_time_ms(time_after_call) - get_time_ms(start_time))/1000;
 
     //printf("computation : %lu\n", computation);
 
-    int period = period_rand*computation;
+    unsigned long period = (unsigned long)period_rand*computation;
 
-    //printf("period = %d", period);
+    printf("period = %d", period);
 
 
 //-------------REGISTER-------------------------------
-
-    //Open the file directly for writing
-    fd = open(FILE_PATH, O_RDWR); 
-    if(fd == -1) {
-        perror("Failed to open /proc/mp2/status");
-        return 1;
-    }
-
-    // Format the registration string
-    memset(buffer, 0, SIZE); // Clear the buffer
-    sprintf(buffer, "R,%s,%d,%d\n", pid_str, period, computation);
-
-    //printf("Buffer val: %s\n", buffer);
-    // Write the string to /proc/mp2/status
-    if (write(fd, buffer, strlen(buffer)) == -1) {
-        perror("Failed to write to /proc/mp2/status");
-        close(fd);
-        return 1;
-    }
+    register_task(pid,period,computation);
 
 //---------------------YIELD---------------------------------------------------------------------------
 
+   if(check_status(pid) == 0) {
+        return 0; 
+   }
+
+
+    yield(pid); 
+   
+    while(yield_iterations--) {
+
+
+        printf("doing job with pid %d\n", pid);
+
+        do_job(jobs); 
+       
+        printf("job donewith pid %d\n", pid);
+
+
+       yield(pid); 
+
+
+    }
+    //-----------DEREGISTER--
+    //------------------------------------------------------------------------------------
+    // Close the file
+
+    deregister(pid);
+
+
+    //printf("Successfully registered process with PID: %s\n", pid_str);
+    return 0;
+}
+
+int check_status(int pid) {
+
+    char rbuf[SIZE];
+    int fd = open(FILE_PATH, O_RDWR); 
+    if(fd == -1) {
+        perror("Failed to open /proc/mp2/status");
+        return;
+    }
+
     memset(rbuf, 0, sizeof(rbuf));
     read(fd, rbuf, sizeof(rbuf));
-    //printf("Read Buffer val: %s\n", rbuf);
+    printf("Read Buffer val: %s\n", rbuf);
     //puts(rbuf);
     
     unsigned long r_period, r_computation; 
@@ -108,7 +130,7 @@ int main(int argc, char *argv[])
 
     while(tokenize != NULL) {
         if(sscanf(tokenize, "%d, %lu, %lu", &r_pid, &r_period, &r_computation)){
-                //printf("TOKENIZED %d, %lu, %lu\n", r_pid, r_period, r_computation );
+                printf("TOKENIZED %d, %lu, %lu\n", r_pid, r_period, r_computation );
                 pid_array[i] = r_pid;
         
                 i++;
@@ -121,87 +143,83 @@ int main(int argc, char *argv[])
         tokenize = strtok(NULL, "\n"); 
     }
 
-    // printf("pid array: ");
-    // for (int j = 0; j < i; j++) {
-    // printf("%d ", pid_array[j]);
-    // }
-    // printf("\n");
-
-   // printf("Checking for process in the list\n"); 
-
     int proc = process_in_the_list((unsigned int)pid, pid_array, i);
 
-   // printf("proc val %d\n", proc); 
 
     if(proc == 0) {
         close(fd);
         return 0;
     }
 
-    //printf("Line 105");
-
-    // long wakeup_time, process_time; 
-    // struct timespec t0; 
-
-    // clock_gettime(CLOCK_MONOTONIC, &t0); 
-
-    yield(fd, r_pid); 
-   // printf("Initial Yield done\n") ; 
-
-
-    //printf("entering while loop for running the process\n");
-    while(yield_iterations--) {
-
-        //wakeup_time = getTime_ms(t0); 
-
-        printf("doing job\n");
-
-        do_job(); 
-        //usleep(10000); 
-
-        printf("job done\n");
-
-        //process_time = getTime_ms(t0) - wakeup_time; 
-
-       yield(fd, r_pid); 
-
-       //usleep(10000); 
-
-    }
-    //-----------DEREGISTER--
-    //------------------------------------------------------------------------------------
-    // Close the file
-
-    deregister(fd, r_pid);
-
     close(fd);
+    return 1;
 
-    //printf("Successfully registered process with PID: %s\n", pid_str);
-    return 0;
+
 }
 
-void yield(int fd, unsigned int pid) {
+void register_task(unsigned int pid, unsigned long period, unsigned long computation) {
 
+    char buffer[SIZE];
+    int fd = open(FILE_PATH, O_RDWR); 
+    if(fd == -1) {
+        perror("Failed to open /proc/mp2/status");
+        return;
+    }
+
+    // Format the registration string
+    memset(buffer, 0, SIZE); // Clear the buffer
+    sprintf(buffer, "R,%d,%lu,%lu\n", pid, period, computation);
+
+    //printf("Buffer val: %s\n", buffer);
+    // Write the string to /proc/mp2/status
+    if (write(fd, buffer, strlen(buffer)) == -1) {
+        perror("Failed to write to /proc/mp2/status");
+        close(fd);
+        return;
+    }
+
+    close(fd);
+    
+}
+
+void yield(unsigned int pid) {
+    
     char ybuf[SIZE];
+    int fd = open(FILE_PATH, O_RDWR); 
+    if(fd == -1) {
+        perror("Failed to open /proc/mp2/status");
+        return;
+    }
+
     memset(ybuf, 0, SIZE); 
     sprintf(ybuf, "Y,%d\n",pid);
 
     write(fd, ybuf, strlen(ybuf));
 
+    close(fd);
+
 }
 
-void deregister(int fd, unsigned int pid) {
+void deregister(unsigned int pid) {
 
     char dbuf[SIZE];
+    int fd = open(FILE_PATH, O_RDWR); 
+    if(fd == -1) {
+        perror("Failed to open /proc/mp2/status");
+        return;
+    }
     memset(dbuf, 0, SIZE); 
     sprintf(dbuf, "D,%d\n",pid);
 
     printf("Dbuf %s\n", dbuf);
 
     write(fd, dbuf, strlen(dbuf));
+    close(fd);
 }
 
-void do_job() {
+void do_job(int i) {
+
+    while(i--) {
     volatile long long unsigned int sum = 0;
     for (int i = 0; i < 1000; i++) {
         volatile long long unsigned int fac = 1;
@@ -210,6 +228,8 @@ void do_job() {
         }
         sum += fac;
     }
+    }
+
 }
 
 

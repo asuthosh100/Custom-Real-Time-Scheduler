@@ -56,7 +56,7 @@ struct mp2_task_struct {
 	struct task_struct *linux_task;
 	struct timer_list wakeup_timer;
 	struct list_head list;
-	pid_t pid_ts;
+	unsigned int pid_ts;
 	unsigned long period_ms;
 	unsigned long computation;
 	unsigned long deadline;
@@ -68,17 +68,16 @@ struct task_struct *dispatcher_thread_struct;
 struct mp2_task_struct* mp2_current;
 
 
-//void __register_task(char *kbuffer);
+
 void __sched_new_task(struct mp2_task_struct *task);
 void __sched_old_task(struct mp2_task_struct *tsk);
 void __wake_up_current_task(struct mp2_task_struct *data);
 void timer_callback(struct timer_list *timer);
 static int admission_control(struct mp2_task_struct *data);
 
-//void __register_task(char *kbuffer);
-void register_task(char *kbuf);
-void deregister_task(char *dbuf);
-void yield_handler(char *ybuf);
+void register_task(unsigned int pid, unsigned long period, unsigned long computation);
+void deregister_task(unsigned int pid);
+void yield_handler(unsigned int pid);
 
 
 
@@ -148,10 +147,15 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     char *type;
     char *kbuffer;
+	char *kbuf_copy;
+	unsigned int pid;
+	unsigned long period;
+	unsigned long computation;
 
 
     // Allocate memory for the kernel buffer
     kbuffer = kmalloc(count + 1, GFP_KERNEL);
+	
     if (!kbuffer) {
         return -ENOMEM;
     }
@@ -165,28 +169,47 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     kbuffer[count] = '\0';  // Null-terminate the string
 
-    type = strsep(&kbuffer, ","); 
+	kbuf_copy = kstrdup(kbuffer, GFP_KERNEL);
+    if (!kbuf_copy) {
+        kfree(kbuffer);
+        return -ENOMEM;
+    }
+
+    type = strsep(&kbuf_copy, ","); 
 	printk(KERN_ALERT "type: %s\n", type);
 
 
 	if(strcmp(type, REGISTER)== 0) {
-		register_task(kbuffer);
+		if (sscanf(kbuffer, "R,%d,%lu,%lu", &pid, &period, &computation) == 3) {
+            register_task(pid, period, computation);
+        } else {
+            printk(KERN_ALERT "Failed to parse REGISTER input\n");
+        }
 	}
 
-	if (strcmp(type, DEREGISTER)== 0) {
-		deregister_task(kbuffer);
+	else if (strcmp(type, DEREGISTER) == 0) {
+        if (sscanf(kbuffer, "D,%d", &pid) == 1) {
+            deregister_task(pid);
+        } else {
+            printk(KERN_ALERT "Failed to parse DEREGISTER input\n");
+        }
 	}
 
-	else if (strcmp(type, YIELD)== 0) {
-		yield_handler(kbuffer); 
+	else if (strcmp(type, YIELD) == 0) {
+        if (sscanf(kbuffer, "Y,%d", &pid) == 1) {
+            yield_handler(pid);
+        }  else {
+            printk(KERN_ALERT "Failed to parse Yield input\n");
+        }
 	}
 
+	kfree(kbuf_copy);
 	kfree(kbuffer);  // Free the allocated memory
     return count;
 }
 
 
-void register_task(char *kbuf) {
+void register_task(unsigned int pid, unsigned long period, unsigned long computation) {
 	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
 	if (!new_task) {
         printk(KERN_ERR "Failed to allocate memory for new task\n");
@@ -194,29 +217,9 @@ void register_task(char *kbuf) {
     }
 	INIT_LIST_HEAD(&new_task->list); 
 
-	char *pid;
-    char *period;
-    char *processing_time; 
-
-	
-  // __register_task(kbuffer + 3); 
-    pid = strsep(&kbuf, ",");
-    period = strsep(&kbuf, ",");
-    processing_time = strsep(&kbuf, ",");
-
-	if (!pid || !period || !processing_time) {
-        printk(KERN_ERR "Invalid input format in register_task\n");
-        kmem_cache_free(mp2_ts, new_task);
-        return;
-    }
-
-    // Log the parsed values
-	//printk(KERN_ALERT "PID: %s, Period: %s, Processing Time: %s\n", pid, period, processing_time);
-
-	if(kstrtoint(pid, 10, &(new_task->pid_ts)) || kstrtoul(period, 10, &(new_task->period_ms)) || kstrtoul(processing_time, 10, &(new_task->computation))) {
-		kmem_cache_free(mp2_ts, new_task);
-        return;
-	}
+	new_task->pid_ts = pid;
+	new_task->period_ms = period;
+	new_task->computation = computation;
 
 	new_task->deadline = 0; 
 
@@ -230,7 +233,7 @@ void register_task(char *kbuf) {
 
 	if (new_task->linux_task == NULL) {
     printk(KERN_ERR "Failed to find task with PID: %d\n", pid_for_lt);
-    kmem_cache_free(mp2_ts, new_task); // example cleanup
+    //kmem_cache_free(mp2_ts, new_task); // example cleanup
     return;
 
 	} else {
@@ -239,10 +242,10 @@ void register_task(char *kbuf) {
 
 	timer_setup(&new_task->wakeup_timer, timer_callback, 0); 
 
-	if (!admission_control(new_task)) {
-		kmem_cache_free(mp2_ts, new_task);
-        return;
-    }
+	// if (!admission_control(new_task)) {
+	// 	kmem_cache_free(mp2_ts, new_task);
+    //     return;
+    // }
 	
 	//printk(KERN_ALERT "PID: %d, Period: %lu, Processing Time: %lu\n", new_task->pid_ts, new_task->period_ms, new_task->computation);
 	
@@ -251,69 +254,45 @@ void register_task(char *kbuf) {
 	mutex_unlock(&pcb_list_mutex); 
 }
 
-void deregister_task(char *dbuf) {
+void deregister_task(unsigned int pid) {
 
  printk(KERN_ALERT "Deregister handler invoked\n");
 
-	char *pid_str; 
-	unsigned int pid;
 	struct mp2_task_struct *pos, *next, *temp; 
-
-	pid_str = strsep(&dbuf, ",");
-
-	if (kstrtoint(pid_str, 10, &pid)) {
-        printk(KERN_ERR "Invalid PID format in deregister_task\n");
-        return;
-    }
-
-
-	// struct mp2_task_struct *pos, *next, *temp; 
 
 	mutex_lock(&pcb_list_mutex); 
 	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
 		if(pos->pid_ts == pid) { 
-			temp = pos;
 			del_timer(&pos->wakeup_timer);
 			list_del(&pos->list);
 			printk(KERN_ALERT "Deregistering pid %d\n",pid);
+
+			if(mp2_current == pos) {
+				mp2_current = NULL;
+			}
 			kmem_cache_free(mp2_ts, pos);
-			mp2_current = NULL;
+			
 			wake_up_process(dispatcher_thread_struct);
+			break;
 		}
 	
 	}
 	mutex_unlock(&pcb_list_mutex);
 
-	// mutex_lock(&pcb_ts_mutex);
-
-	// if(mp2_current == temp) {
-    //     mp2_current = NULL;
-    //     wake_up_process(dispatcher_thread_struct);
-    // }
-    // mutex_unlock(&pcb_ts_mutex);
 
 
 }
 
 
-void yield_handler(char *ybuf) {
-
-	char *pid_yld; 
-	unsigned int pid;
+void yield_handler(unsigned int pid) {
 
 	struct mp2_task_struct *pos,*next;
-	struct mp2_task_struct *req_task = NULL;
+	struct mp2_task_struct *req_task;
 
-	//printk(KERN_ALERT "entering yield handler");
+	printk(KERN_ALERT "entering yield handler");
 
-	pid_yld = strsep(&ybuf, ",");
 
-	if (kstrtoint(pid_yld, 10, &pid)) {
-        printk(KERN_ERR "Invalid PID format in deregister_task\n");
-        return;
-    }
-
-	//printk(KERN_ALERT "yield handler:pid is %d\n", pid);
+	printk(KERN_ALERT "yield handler:pid is %d\n", pid);
 
 
 	//printk(KERN_ALERT "locking facility for pcb list mutex (yield handler)");
@@ -335,11 +314,11 @@ void yield_handler(char *ybuf) {
 
 	if(req_task->deadline == 0) {
 		req_task->deadline = jiffies + msecs_to_jiffies(req_task->period_ms);
-		printk(KERN_ALERT "yield initial deadline : %lu", req_task->deadline);
-		req_task->state = READY;
+		//printk(KERN_ALERT "yield initial deadline : %lu and pid %d\n", req_task->deadline, req_task->pid_ts);
+		//req_task->state = READY;
 	} else {
 		req_task->deadline = req_task->deadline + msecs_to_jiffies(req_task->period_ms);
-		printk(KERN_ALERT "yield second deadline : %lu", req_task->deadline);
+		//printk(KERN_ALERT "yield additional deadline : %lu and pid %d\n", req_task->deadline, req_task->pid_ts);
 		req_task->state = SLEEPING;
 
 		if(req_task->deadline < jiffies) {
@@ -366,11 +345,18 @@ void yield_handler(char *ybuf) {
 }
 
 void timer_callback(struct timer_list *timer) {
+
+	mutex_lock(&pcb_ts_mutex); 
 	printk(KERN_ALERT "Timer CallBack Invoked\n");
     struct mp2_task_struct *task = from_timer(task, timer, wakeup_timer);
+	printk(KERN_ALERT "pid at the timer callback : %d\n", task->pid_ts);
     task->state = READY;
+	mutex_unlock(&pcb_ts_mutex); 
+
     wake_up_process(dispatcher_thread_struct);
 }
+
+
 
 
 void __sched_old_task(struct mp2_task_struct *task) {
@@ -378,6 +364,7 @@ void __sched_old_task(struct mp2_task_struct *task) {
         printk(KERN_ERR "Invalid task or task->linux_task in __sched_old_task\n");
         return;
     }
+	printk(KERN_ALERT "pid of task to be scheduled old_task is %d\n", task->pid_ts);
     struct sched_attr attr;
     attr.sched_policy = SCHED_NORMAL;
     attr.sched_priority = 0;
@@ -389,6 +376,7 @@ void __sched_new_task(struct mp2_task_struct *task) {
         printk(KERN_ERR "Invalid task or task->linux_task in __sched_new_task\n");
         return;
     }
+	printk(KERN_ALERT "pid of task to be scheduled new_task is %d\n", task->pid_ts);
     struct sched_attr attr; 
     attr.sched_policy = SCHED_FIFO;
     attr.sched_priority = 99;
@@ -400,10 +388,17 @@ static int dispatching_thread(void *data) {
     printk(KERN_ALERT "Dispatcher thread started");
 
     while (!kthread_should_stop()) {
+
+		set_current_state(TASK_INTERRUPTIBLE);
+        schedule(); 
+		// Sleep if no tasks are `READY`
         // Check if any task is ready
+		mutex_lock(&pcb_ts_mutex);
+
         struct mp2_task_struct *pos, *next, *temp = NULL;
 
-		printk(KERN_ALERT "Entering Dispatcher thread pcbTaskList lock\n");
+		
+		//printk(KERN_ALERT "Entering Dispatcher thread pcbTaskList lock\n");
         mutex_lock(&pcb_list_mutex);
         list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
             if (pos->state == READY) {
@@ -413,22 +408,29 @@ static int dispatching_thread(void *data) {
             }
         }
         mutex_unlock(&pcb_list_mutex);
-		printk(KERN_ALERT "Exiting Dispatcher thread pcbTaskList lock\n");
+		//printk(KERN_ALERT "Exiting Dispatcher thread pcbTaskList lock\n");
 
-        if (temp) {
-			printk(KERN_ALERT "Entering Dispatcher thread pcbTs lock\n");
-            mutex_lock(&pcb_ts_mutex);
-            if (mp2_current) {
-                __sched_old_task(mp2_current); // Demote the current task
+		//mutex_lock(&pcb_ts_mutex);
+
+		if(temp == NULL) {
+			if(mp2_current) {
+				 __sched_old_task(mp2_current);
+			}
+		}
+
+		else {
+			 if (mp2_current && mp2_current->period_ms > temp->period_ms) {
+                // Demote the current task
                 mp2_current->state = READY;
+				__sched_old_task(mp2_current); 
             }
             __wake_up_current_task(temp); // Promote the new task
-            mutex_unlock(&pcb_ts_mutex);
-			printk(KERN_ALERT "Exiting Dispatcher thread pcbTs lock\n");
-        }
+		}
 
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule(); // Sleep if no tasks are `READY`
+		mutex_unlock(&pcb_ts_mutex);
+
+        // set_current_state(TASK_INTERRUPTIBLE);
+        // schedule(); // Sleep if no tasks are `READY`
     }
 
     printk(KERN_ALERT "Dispatcher thread stopping\n");
@@ -469,6 +471,7 @@ void __wake_up_current_task(struct mp2_task_struct *data) {
 	__sched_new_task(data);
 	data->state = RUNNING; 
 	mp2_current = data; 
+	printk(KERN_ALERT "Current Running Task PID %d", mp2_current->pid_ts); 
 }
 
 
@@ -502,7 +505,7 @@ int __init rts_init(void)
 
 	printk(KERN_ALERT "status created....\n");
 
-	mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_PANIC, NULL);
+	mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_HWCACHE_ALIGN, NULL);
 
 	//mp2_ts = kmem_cache_create("mp2_task_struct_cache", sizeof(struct mp2_task_struct), 0, SLAB_PANIC | __GFP_NOWARN, NULL);
 
@@ -526,12 +529,7 @@ void __exit rts_exit(void)
 
 
 
-	remove_proc_entry("status", proc_dir);
-	printk(KERN_WARNING "status removed....\n");
-
-	// Remove the directory within the proc filesystem
-	remove_proc_entry("mp2", NULL);
-	printk(KERN_WARNING "mp2 removed...\n");
+	
 
 	del_timer_sync(&mp2_timer);
 
@@ -547,6 +545,13 @@ void __exit rts_exit(void)
 	}
 	
 	kmem_cache_destroy(mp2_ts); 
+
+	remove_proc_entry("status", proc_dir);
+	printk(KERN_WARNING "status removed....\n");
+
+	// Remove the directory within the proc filesystem
+	remove_proc_entry("mp2", NULL);
+	printk(KERN_WARNING "mp2 removed...\n");
 
 	printk(KERN_ALERT "RTS MODULE UNLOADED\n");
 
