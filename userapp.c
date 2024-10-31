@@ -62,11 +62,11 @@ int main(int argc, char *argv[])
 
     computation = (int)(get_time_ms(time_after_call) - get_time_ms(start_time))/1000;
 
-    printf("computation : %lu\n", computation);
+    //printf("computation : %lu\n", computation);
 
     int period = period_rand*computation;
 
-    printf("period = %d", period);
+    //printf("period = %d", period);
 
 
 //-------------REGISTER-------------------------------
@@ -121,13 +121,13 @@ int main(int argc, char *argv[])
         tokenize = strtok(NULL, "\n"); 
     }
 
-    printf("pid array: ");
-    for (int j = 0; j < i; j++) {
-    printf("%d ", pid_array[j]);
-    }
-    printf("\n");
+    // printf("pid array: ");
+    // for (int j = 0; j < i; j++) {
+    // printf("%d ", pid_array[j]);
+    // }
+    // printf("\n");
 
-    printf("Checking for process in the list\n"); 
+   // printf("Checking for process in the list\n"); 
 
     int proc = process_in_the_list((unsigned int)pid, pid_array, i);
 
@@ -146,20 +146,20 @@ int main(int argc, char *argv[])
     // clock_gettime(CLOCK_MONOTONIC, &t0); 
 
     yield(fd, r_pid); 
-    printf("Initial Yield done\n") ; 
+   // printf("Initial Yield done\n") ; 
 
 
-    printf("entering while loop for running the process\n");
+    //printf("entering while loop for running the process\n");
     while(yield_iterations--) {
 
         //wakeup_time = getTime_ms(t0); 
 
-        printf("doing job");
+        printf("doing job\n");
 
         do_job(); 
         //usleep(10000); 
 
-        printf("job done");
+        printf("job done\n");
 
         //process_time = getTime_ms(t0) - wakeup_time; 
 
@@ -227,17 +227,6 @@ int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
     return 0;
 }
 
-// long getTime_ms(struct timespec begin) {
-//     struct timespec curr; 
-//     long sec, nanosec; 
-
-//     clock_gettime(CLOCK_MONOTONIC, &curr); 
-
-//     sec = curr.tv_sec - begin.tv_sec;
-//     nanosec = curr.tv_nsec - begin.tv_nsec; 
-
-//     return (sec*1000) + (nanosec/1000000); 
-// }
 
 unsigned long get_time_ms(struct timespec time) {
      return time.tv_sec * 1000000000L + time.tv_nsec;
