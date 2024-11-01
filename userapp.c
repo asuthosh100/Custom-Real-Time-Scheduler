@@ -8,8 +8,8 @@
 // #include <lib.h>
 
 #define FILE_PATH "/proc/mp2/status"
-#define SIZE 100
-#define PIDSIZE 100
+#define SIZE 1000
+#define PIDSIZE 1000
 
 //=============================================================================
 
@@ -25,12 +25,12 @@ void register_task(unsigned int pid, unsigned long period, unsigned long computa
 
 int main(int argc, char *argv[])
 {
-    int pid = getpid();
+    unsigned int pid = getpid();
     // char pid_str[10]; // Buffer to hold the string representation of the PID
     // sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
 
-    //printf("Successfully registered process with PID: %s\n", pid_str);
-    
+    printf("Successfully registered process with PID: %d\n", pid);
+
     char rbuf[SIZE];
 
     if (argc != 4) {
@@ -168,7 +168,7 @@ void register_task(unsigned int pid, unsigned long period, unsigned long computa
 
     // Format the registration string
     memset(buffer, 0, SIZE); // Clear the buffer
-    sprintf(buffer, "R,%d,%lu,%lu\n", pid, period, computation);
+    sprintf(buffer, "R,%u,%lu,%lu", pid, period, computation);
 
     //printf("Buffer val: %s\n", buffer);
     // Write the string to /proc/mp2/status
@@ -192,7 +192,7 @@ void yield(unsigned int pid) {
     }
 
     memset(ybuf, 0, SIZE); 
-    sprintf(ybuf, "Y,%d\n",pid);
+    sprintf(ybuf, "Y,%u\n",pid);
 
     write(fd, ybuf, strlen(ybuf));
 
@@ -209,9 +209,9 @@ void deregister(unsigned int pid) {
         return;
     }
     memset(dbuf, 0, SIZE); 
-    sprintf(dbuf, "D,%d\n",pid);
+    sprintf(dbuf, "D,%u\n",pid);
 
-    printf("Dbuf %s\n", dbuf);
+    //printf("Dbuf %s\n", dbuf);
 
     write(fd, dbuf, strlen(dbuf));
     close(fd);
@@ -236,7 +236,7 @@ void do_job(int i) {
 int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
     for(int i = 0; i<size; i++) {
         if(pid_arr[i] == pid) {
-            printf("Process in the list helper, pid: %d\n", pid);
+            //printf("Process in the list helper, pid: %d\n", pid);
             return 1;
         }   
 

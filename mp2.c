@@ -75,9 +75,13 @@ void __wake_up_current_task(struct mp2_task_struct *data);
 void timer_callback(struct timer_list *timer);
 static int admission_control(struct mp2_task_struct *data);
 
-void register_task(unsigned int pid, unsigned long period, unsigned long computation);
-void deregister_task(unsigned int pid);
-void yield_handler(unsigned int pid);
+// void register_task(unsigned int pid, unsigned long period, unsigned long computation);
+// void deregister_task(unsigned int pid);
+// void yield_handler(unsigned int pid);
+
+void register_task(char *kbuf);
+void deregister_task(char *kbuf);
+void yield_handler(char *kbuf);
 
 
 
@@ -169,47 +173,59 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
 
     kbuffer[count] = '\0';  // Null-terminate the string
 
-	kbuf_copy = kstrdup(kbuffer, GFP_KERNEL);
-    if (!kbuf_copy) {
-        kfree(kbuffer);
-        return -ENOMEM;
-    }
+	// kbuf_copy = kstrdup(kbuffer, GFP_KERNEL);
+    // if (!kbuf_copy) {
+    //     kfree(kbuffer);
+    //     return -ENOMEM;
+    // }
 
-    type = strsep(&kbuf_copy, ","); 
-	printk(KERN_ALERT "type: %s\n", type);
+    // type = strsep(&kbuf_copy, ","); 
+	// printk(KERN_ALERT "type: %s\n", type);
 
 
-	if(strcmp(type, REGISTER)== 0) {
-		if (sscanf(kbuffer, "R,%d,%lu,%lu", &pid, &period, &computation) == 3) {
-            register_task(pid, period, computation);
-        } else {
-            printk(KERN_ALERT "Failed to parse REGISTER input\n");
-        }
+	// if(strcmp(type, REGISTER)== 0) {
+	// 	if (sscanf(kbuffer, "R,%d,%lu,%lu", &pid, &period, &computation) == 3) {
+    //         register_task(pid, period, computation);
+    //     } else {
+    //         printk(KERN_ALERT "Failed to parse REGISTER input\n");
+    //     }
+	// }
+
+	// else if (strcmp(type, DEREGISTER) == 0) {
+    //     if (sscanf(kbuffer, "D,%d", &pid) == 1) {
+    //         deregister_task(pid);
+    //     } else {
+    //         printk(KERN_ALERT "Failed to parse DEREGISTER input\n");
+    //     }
+	// }
+
+	// else if (strcmp(type, YIELD) == 0) {
+    //     if (sscanf(kbuffer, "Y,%d", &pid) == 1) {
+    //         yield_handler(pid);
+    //     }  else {
+    //         printk(KERN_ALERT "Failed to parse Yield input\n");
+    //     }
+	// }
+
+	if(kbuffer[0] == 'R') {
+		register_task(kbuffer);
 	}
 
-	else if (strcmp(type, DEREGISTER) == 0) {
-        if (sscanf(kbuffer, "D,%d", &pid) == 1) {
-            deregister_task(pid);
-        } else {
-            printk(KERN_ALERT "Failed to parse DEREGISTER input\n");
-        }
+	else if(kbuffer[0] == 'Y') {
+		yield_handler(kbuffer);
 	}
 
-	else if (strcmp(type, YIELD) == 0) {
-        if (sscanf(kbuffer, "Y,%d", &pid) == 1) {
-            yield_handler(pid);
-        }  else {
-            printk(KERN_ALERT "Failed to parse Yield input\n");
-        }
+	else if(kbuffer[0] == 'D') {
+		deregister_task(kbuffer);
 	}
 
-	kfree(kbuf_copy);
+	// kfree(kbuf_copy);
 	kfree(kbuffer);  // Free the allocated memory
     return count;
 }
 
 
-void register_task(unsigned int pid, unsigned long period, unsigned long computation) {
+void register_task(char *kbuf) {
 	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
 	if (!new_task) {
         printk(KERN_ERR "Failed to allocate memory for new task\n");
@@ -217,27 +233,42 @@ void register_task(unsigned int pid, unsigned long period, unsigned long computa
     }
 	INIT_LIST_HEAD(&new_task->list); 
 
-	new_task->pid_ts = pid;
-	new_task->period_ms = period;
-	new_task->computation = computation;
+	// sscanf(strsep(&kbuf, ","), "%d", &new_task->pid_ts);
+	// printk(KERN_ALERT "pid : %d\n", new_task->pid_ts);
+	
+	// sscanf(strsep(&kbuf, ","), "%lu", &new_task->period_ms);
+	// sscanf(strsep(&kbuf, ","), "%lu", &new_task->computation);
+
+	// new_task->pid_ts = pid;
+	// new_task->period_ms = period;
+	// new_task->computation = computation;
+
+// 	if (sscanf(kbuf, "%u,%lu,%lu", &new_task->pid_ts, &new_task->period_ms, &new_task->computation) != 3) {
+//     printk(KERN_ALERT "Failed to parse REGISTER input: %s\n", kbuf);
+//     //kmem_cache_free(mp2_ts, new_task);
+//     return;
+// }
+
+	sscanf(kbuf, "R,%u,%lu,%lu", &new_task->pid_ts, &new_task->period_ms, &new_task->computation);
+	printk(KERN_ALERT "Parsed PID in kernel: %u\n", new_task->pid_ts);
+
 
 	new_task->deadline = 0; 
 
 	new_task->state = SLEEPING;
 
-	unsigned int pid_for_lt = (unsigned int)new_task->pid_ts;
 
 	//printk(KERN_ALERT "pid in kernel %d\n", pid_for_lt );
 
-	new_task->linux_task = find_task_by_pid(pid_for_lt); 
+	new_task->linux_task = find_task_by_pid(new_task->pid_ts); 
 
 	if (new_task->linux_task == NULL) {
-    printk(KERN_ERR "Failed to find task with PID: %d\n", pid_for_lt);
+    printk(KERN_ERR "Failed to find task with PID: %d\n", new_task->pid_ts);
     //kmem_cache_free(mp2_ts, new_task); // example cleanup
     return;
 
 	} else {
-    printk(KERN_INFO "Found task with PID: %d\n", pid_for_lt);
+    printk(KERN_INFO "Found task with PID: %d\n", new_task->pid_ts);
  }
 
 	timer_setup(&new_task->wakeup_timer, timer_callback, 0); 
@@ -254,11 +285,15 @@ void register_task(unsigned int pid, unsigned long period, unsigned long computa
 	mutex_unlock(&pcb_list_mutex); 
 }
 
-void deregister_task(unsigned int pid) {
+void deregister_task(char *kbuf) {
 
  printk(KERN_ALERT "Deregister handler invoked\n");
 
 	struct mp2_task_struct *pos, *next, *temp; 
+	unsigned int pid;
+
+	sscanf(kbuf, "D,%u", &pid);
+	printk(KERN_ALERT "Parsed PID in kernel: %u\n", pid);
 
 	mutex_lock(&pcb_list_mutex); 
 	list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
@@ -284,10 +319,15 @@ void deregister_task(unsigned int pid) {
 }
 
 
-void yield_handler(unsigned int pid) {
+void yield_handler(char *kbuf) {
 
 	struct mp2_task_struct *pos,*next;
 	struct mp2_task_struct *req_task;
+
+	unsigned int pid;
+
+	sscanf(kbuf, "Y,%u", &pid);
+	printk(KERN_ALERT "Parsed PID in kernel: %u\n", pid);
 
 	printk(KERN_ALERT "entering yield handler");
 
