@@ -86,6 +86,8 @@ void yield_handler(char *kbuf);
 
 
 //------------------------------------------------------------------
+
+// read handler used to read the alive processes from the proc file system
 static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
 {	
 	//printk(KERN_ALERT "read_handler"); 
@@ -146,6 +148,8 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 
 }
 
+// write handler is where register, yield and deregister takes place.
+
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
 
@@ -186,7 +190,7 @@ static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t 
     return count;
 }
 
-
+// register_task helper
 void register_task(char *kbuf) {
 	struct mp2_task_struct *new_task = kmem_cache_alloc(mp2_ts, GFP_KERNEL); 
 	if (!new_task) {
@@ -231,6 +235,7 @@ void register_task(char *kbuf) {
 	mutex_unlock(&pcb_list_mutex); 
 }
 
+// deregister helper
 void deregister_task(char *kbuf) {
 
  	struct mp2_task_struct *pos, *next; 
@@ -264,7 +269,7 @@ void deregister_task(char *kbuf) {
 
 }
 
-
+// yield hanlder
 void yield_handler(char *kbuf) {
 
 	struct mp2_task_struct *pos,*next;
@@ -329,6 +334,8 @@ void yield_handler(char *kbuf) {
 //TASK_INTERRUPTIBLEs
 }
 
+// timer callback for timer handler
+//The handler changes the state of task to ready and should wake up the dispatching thread
 void timer_callback(struct timer_list *timer) {
 
 	struct mp2_task_struct *task;
@@ -345,7 +352,7 @@ void timer_callback(struct timer_list *timer) {
 
 
 
-
+// Helper function. For old running task, the dispatching thread will execute this.
 void __sched_old_task(struct mp2_task_struct *task) {
 
 	struct sched_attr attr;
@@ -359,7 +366,7 @@ void __sched_old_task(struct mp2_task_struct *task) {
     attr.sched_priority = 0;
     sched_setattr_nocheck(task->linux_task, &attr);
 }
-
+// Helper function. For new running task, the dispatching thread will execute this.
 void __sched_new_task(struct mp2_task_struct *task) {
 	struct sched_attr attr; 
     if (!task || !task->linux_task) {
@@ -373,7 +380,7 @@ void __sched_new_task(struct mp2_task_struct *task) {
     sched_setattr_nocheck(task->linux_task, &attr);
 }
 
-
+// Dispatcher responsible for triggering context switches. 
 static int dispatching_thread(void *data) {
     
 	struct mp2_task_struct *pos, *next, *temp;
@@ -381,10 +388,11 @@ static int dispatching_thread(void *data) {
 
     while (!kthread_should_stop()) {
 
+		// Sleep if no tasks are `READY`
 		set_current_state(TASK_INTERRUPTIBLE);
         schedule(); 
-		// Sleep if no tasks are `READY`
-        // Check if any task is ready
+		
+       
 		mutex_lock(&pcb_ts_mutex);
 
         temp = NULL;
@@ -393,7 +401,7 @@ static int dispatching_thread(void *data) {
 		//printk(KERN_ALERT "Entering Dispatcher thread pcbTaskList lock\n");
         mutex_lock(&pcb_list_mutex);
         list_for_each_entry_safe(pos, next, &pcb_task_list, list) {
-            if (pos->state == READY) {
+            if (pos->state == READY) {  // Check if any task is ready
                 if (!temp || pos->period_ms < temp->period_ms) {
                     temp = pos;
                 }
@@ -429,7 +437,7 @@ static int dispatching_thread(void *data) {
     return 0;
 }
 
-
+// The admission control checks if the current task set and task to be admitted can be scheduled without missing any deadline
 static int admission_control(struct mp2_task_struct *data) {
 
 	struct mp2_task_struct *pos, *next; 
@@ -455,7 +463,7 @@ static int admission_control(struct mp2_task_struct *data) {
 	}
 }
 
-
+// Wake up current task helper used in dispatching thread function
 void __wake_up_current_task(struct mp2_task_struct *data) {
 	
 	wake_up_process(data->linux_task);

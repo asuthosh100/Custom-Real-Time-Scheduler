@@ -25,7 +25,7 @@ int check_status(int pid);
 
 int main(int argc, char *argv[])
 {
-    unsigned int pid = getpid();
+    unsigned int pid = getpid(); // get pid
     // char pid_str[10]; // Buffer to hold the string representation of the PID
     // sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
    struct timespec start_time, time_after_call;
     unsigned long computation;
 
-    
+    // to compute computation
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     
@@ -78,20 +78,20 @@ int main(int argc, char *argv[])
    }
 
 
-    yield(pid); 
+    yield(pid); //intial yield where the userapp is notifying the kernel that it is ready to be scheduled
    
     while(yield_iterations--) {
 
         printf("doing job with pid %d\n", pid);
 
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        //clock_gettime(CLOCK_MONOTONIC, &start_time);
 
         do_job(jobs); 
        
         printf("job done with pid %d\n", pid);
 
 
-       yield(pid); 
+       yield(pid); // second yield
 
 
     }
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
     //printf("Successfully registered process with PID: %s\n", pid_str);
     return 0;
 }
-
+// this funtions is essential to check if a process is in the list
 int check_status(int pid) {
 
     char rbuf[SIZE];
@@ -158,6 +158,8 @@ int check_status(int pid) {
 
 }
 
+//register helper
+
 void register_task(unsigned int pid, unsigned long period, unsigned long computation) {
 
     char buffer[SIZE];
@@ -182,7 +184,7 @@ void register_task(unsigned int pid, unsigned long period, unsigned long computa
     close(fd);
     
 }
-
+// yield helper
 void yield(unsigned int pid) {
     
     char ybuf[SIZE];
@@ -201,6 +203,7 @@ void yield(unsigned int pid) {
 
 }
 
+//deregister helper
 void deregister(unsigned int pid) {
 
     char dbuf[SIZE];
@@ -218,6 +221,7 @@ void deregister(unsigned int pid) {
     close(fd);
 }
 
+// out job
 void do_job(int i) {
 
     while(i--) {
@@ -233,7 +237,7 @@ void do_job(int i) {
 
 }
 
-
+// check_status helper
 int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
     for(int i = 0; i<size; i++) {
         if(pid_arr[i] == pid) {
@@ -248,7 +252,7 @@ int process_in_the_list(unsigned int pid, int pid_arr[], int size) {
     return 0;
 }
 
-
+// function to get time in milli seconds
 unsigned long get_time_ms(struct timespec time) {
      return time.tv_sec * 1000000000L + time.tv_nsec;
 }
