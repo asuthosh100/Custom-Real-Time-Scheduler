@@ -20,7 +20,7 @@ void yield(unsigned int pid);
 void deregister(unsigned int pid);
 unsigned long get_time_ms(struct timespec time);
 void register_task(unsigned int pid, unsigned long period, unsigned long computation);
-
+int check_status(int pid);
 //==================================================================================
 
 int main(int argc, char *argv[])
@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     // char pid_str[10]; // Buffer to hold the string representation of the PID
     // sprintf(pid_str, "%d", pid); // Convert the integer PID to a string
 
-    printf("Successfully registered process with PID: %d\n", pid);
+    //printf("Successfully registered process with PID: %d\n", pid);
 
     char rbuf[SIZE];
 
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
     unsigned long period = (unsigned long)period_rand*computation;
 
-    printf("period = %d", period);
+   // printf("period = %d", period);
 
 
 //-------------REGISTER-------------------------------
@@ -82,12 +82,13 @@ int main(int argc, char *argv[])
    
     while(yield_iterations--) {
 
-
         printf("doing job with pid %d\n", pid);
+
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
 
         do_job(jobs); 
        
-        printf("job donewith pid %d\n", pid);
+        printf("job done with pid %d\n", pid);
 
 
        yield(pid); 
@@ -111,7 +112,7 @@ int check_status(int pid) {
     int fd = open(FILE_PATH, O_RDWR); 
     if(fd == -1) {
         perror("Failed to open /proc/mp2/status");
-        return;
+        return 0;
     }
 
     memset(rbuf, 0, sizeof(rbuf));
