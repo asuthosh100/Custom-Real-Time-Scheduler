@@ -14,6 +14,8 @@ How to Test :
 
 * You can run this : ./userapp 4 2 3 & ./userapp 3 2 5 
 
+* rmmod mp2
+
 Documentation 
 
 The MP involves implementing a Rate-Monotonic Scheduler in the Linux kernel. It uses the Periodic Task Model from Liu and Layland in handling real-time CPU scheduling. The RMS allows tasks to be scheduled according to their periodic intervals. The higher the priority, the shorter the period will be, which enables efficient preemption and context switching in order for those tasks to complete on time. RMS is implemented as a kernel module exporting the possibility to perform registration, yielding, and de-registration through the /proc/mp2/status interface, allowing userspace to interact with kernel scheduling parameters.
