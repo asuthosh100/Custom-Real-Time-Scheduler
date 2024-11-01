@@ -106,7 +106,7 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 	
 	mutex_lock(&pcb_list_mutex);
 	list_for_each_entry(p, &pcb_task_list, list) {
-		len += sprintf(kbuf + len, "%u, %lu, %lu\n", p->pid_ts, p->period_ms, p->computation);
+		len += sprintf(kbuf + len, "%u: %lu, %lu\n", p->pid_ts, p->period_ms, p->computation);
 		//printk(KERN_INFO "PID:%d and READ_TIME:%lu\n", p->pid, p->cpu_time);
 		if(len > count) {
 	        len = count;
@@ -149,12 +149,7 @@ static ssize_t read_handler(struct file *file, char __user *ubuf, size_t count, 
 static ssize_t write_handler(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {	
 
-    //char *type;
     char *kbuffer;
-	// char *kbuf_copy;
-	// // unsigned int pid;
-	// // unsigned long period;
-	// // unsigned long computation;
 
 
     // Allocate memory for the kernel buffer
@@ -306,7 +301,6 @@ void yield_handler(char *kbuf) {
 	if(req_task->deadline == 0) {
 		req_task->deadline = jiffies + msecs_to_jiffies(req_task->period_ms);
 		//printk(KERN_ALERT "yield initial deadline : %lu and pid %d\n", req_task->deadline, req_task->pid_ts);
-		//req_task->state = READY;
 	} else {
 		req_task->deadline = req_task->deadline + msecs_to_jiffies(req_task->period_ms);
 		//printk(KERN_ALERT "yield additional deadline : %lu and pid %d\n", req_task->deadline, req_task->pid_ts);

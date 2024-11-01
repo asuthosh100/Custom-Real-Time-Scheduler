@@ -130,8 +130,8 @@ int check_status(int pid) {
     int i = 0;
 
     while(tokenize != NULL) {
-        if(sscanf(tokenize, "%d, %lu, %lu", &r_pid, &r_period, &r_computation)){
-                printf("TOKENIZED %d, %lu, %lu\n", r_pid, r_period, r_computation );
+        if(sscanf(tokenize, "%d: %lu, %lu", &r_pid, &r_period, &r_computation)){
+                printf("TOKENIZED %d: %lu, %lu\n", r_pid, r_period, r_computation );
                 pid_array[i] = r_pid;
         
                 i++;
