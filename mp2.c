@@ -43,6 +43,7 @@ struct kmem_cache *mp2_ts;
 
 static DEFINE_MUTEX(pcb_list_mutex); 
 static DEFINE_MUTEX(pcb_ts_mutex);
+static DEFINE_SPINLOCK(lock);
 
 enum task_state {
     READY,
@@ -340,12 +341,14 @@ void timer_callback(struct timer_list *timer) {
 
 	struct mp2_task_struct *task;
 
-	mutex_lock(&pcb_ts_mutex); 
+	//mutex_lock(&pcb_ts_mutex); 
+	spin_lock(&lock);
 	printk(KERN_ALERT "Timer CallBack Invoked\n");
     task = from_timer(task, timer, wakeup_timer);
 	printk(KERN_ALERT "pid at the timer callback : %d\n", task->pid_ts);
     task->state = READY;
-	mutex_unlock(&pcb_ts_mutex); 
+	//mutex_unlock(&pcb_ts_mutex); 
+	spin_unlock(&lock);
 
     wake_up_process(dispatcher_thread_struct);
 }
